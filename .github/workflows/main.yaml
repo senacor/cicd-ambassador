@@ -1,0 +1,41 @@
+name: ci
+
+on: push
+
+env:
+  GROUP: senacor
+  COMMIT_SHA: ${{ github.sha }}
+  SERVICE_NAME: ambassador
+  NAMESPACE_NAME: ambassador
+  AMBASSADOR_VERSION: "1.13.6"
+  AMBASSADOR_IMAGE: docker.io/datawire/ambassador
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
+    env:
+      AWS_DEFAULT_REGION: eu-west-2
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: render
+        run: deployment/render.sh
+
+      - name: deploy
+        run: |
+           aws eks update-kubeconfig \
+             --name ${{ secrets.KUBERNETES_CLUSTER_NAME }} \
+             --role-arn ${{ secrets.KUBERNETES_CLUSTER_DEPLOY_ROLE }}
+           kubectl apply -f rendered/
+
+           LOAD_BALANCER_URL=$(
+             kubectl get service \
+               --output json \
+               --namespace "${NAMESPACE_NAME}" \
+               "${SERVICE_NAME}" \
+               | jq -r '.status.loadBalancer.ingress[].hostname'
+             )
+           echo "Load balancer URL is: http://${LOAD_BALANCER_URL}"

@@ -1,0 +1,134 @@
+# Source: ambassador/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "ambassador"
+  namespace: "${NAMESPACE_NAME}"
+  labels:
+    product: aes
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      service: "ambassador"
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        service: "ambassador"
+        app.kubernetes.io/managed-by: getambassador.io
+      annotations:
+        consul.hashicorp.com/connect-inject: 'false'
+        sidecar.istio.io/inject: 'false'
+    spec:
+      terminationGracePeriodSeconds: 0
+      securityContext:
+        runAsUser: 8888
+      restartPolicy: Always
+      serviceAccountName: "ambassador"
+      volumes:
+      - name: "ambassador-pod-info"
+        downwardAPI:
+          items:
+          - fieldRef:
+              fieldPath: metadata.labels
+            path: labels
+      containers:
+      - name: "ambassador"
+        image: ${AMBASSADOR_IMAGE}:${AMBASSADOR_VERSION}
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8080
+        - name: https
+          containerPort: 8443
+        - name: admin
+          containerPort: 8877
+        env:
+        - name: HOST_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
+        - name: AMBASSADOR_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        securityContext:
+          allowPrivilegeEscalation: false
+        livenessProbe:
+          httpGet:
+            path: /ambassador/v0/check_alive
+            port: admin
+          failureThreshold: 3
+          initialDelaySeconds: 30
+          periodSeconds: 3
+        readinessProbe:
+          httpGet:
+            path: /ambassador/v0/check_ready
+            port: admin
+          failureThreshold: 3
+          initialDelaySeconds: 30
+          periodSeconds: 3
+        volumeMounts:
+        - name: "ambassador-pod-info"
+          mountPath: /tmp/ambassador-pod-info
+          readOnly: true
+        resources:
+          limits:
+            cpu: 1
+            memory: 400Mi
+          requests:
+            cpu: 200m
+            memory: 100Mi
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  service: "ambassador"
+              topologyKey: kubernetes.io/hostname
+            weight: 100
+      imagePullSecrets: []
+      dnsPolicy: ClusterFirst
+      hostNetwork: false
+---
+# Source: ambassador/templates/ambassador-agent.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "ambassador-agent"
+  namespace: "${NAMESPACE_NAME}"
+  labels:
+    app.kubernetes.io/name: "ambassador-agent"
+    app.kubernetes.io/instance: "ambassador"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: "ambassador-agent"
+      app.kubernetes.io/instance: "ambassador"
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: "ambassador-agent"
+        app.kubernetes.io/instance: "ambassador"
+    spec:
+      serviceAccountName: "ambassador-agent"
+      containers:
+      - name: agent
+        image: ${AMBASSADOR_IMAGE}:${AMBASSADOR_VERSION}
+        imagePullPolicy: IfNotPresent
+        command: [agent]
+        env:
+        - name: AGENT_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: AGENT_CONFIG_RESOURCE_NAME
+          value: "ambassador-agent-cloud-token"
+        - name: RPC_CONNECTION_ADDRESS
+          value: https://app.getambassador.io/
+        - name: AES_SNAPSHOT_URL
+          value: http://ambassador-admin.default:8005/snapshot-external

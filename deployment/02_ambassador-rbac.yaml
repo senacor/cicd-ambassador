@@ -1,0 +1,204 @@
+# Source: ambassador/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRole
+metadata:
+  name: ambassador
+  labels:
+    product: aes
+aggregationRule:
+  clusterRoleSelectors:
+  - matchLabels:
+      rbac.getambassador.io/role-group: ambassador
+rules: []
+---
+# Source: ambassador/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ambassador
+  namespace: "${NAMESPACE_NAME}"
+  labels:
+    product: aes
+---
+# Source: ambassador/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: ambassador
+  labels:
+    product: aes
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ambassador
+subjects:
+- name: ambassador
+  namespace: "${NAMESPACE_NAME}"
+  kind: ServiceAccount
+---
+# Source: ambassador/templates/rbac.yaml
+# CRDs are cluster scoped resources, so they need to be in a cluster role,
+# even if ambassador is running in single namespace mode
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRole
+metadata:
+  name: ambassador-crd
+  labels:
+    product: aes
+    rbac.getambassador.io/role-group: ambassador
+rules:
+- apiGroups: [apiextensions.k8s.io]
+  resources: [customresourcedefinitions]
+  verbs: [get, list, watch, delete]
+---
+# Source: ambassador/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRole
+metadata:
+  name: ambassador-watch
+  labels:
+    product: aes
+    rbac.getambassador.io/role-group: ambassador
+rules:
+- apiGroups: ['']
+  resources:
+  - namespaces
+  - services
+  - secrets
+  - endpoints
+  verbs: [get, list, watch]
+
+- apiGroups: [getambassador.io]
+  resources: ['*']
+  verbs: [get, list, watch, update, patch, create, delete]
+
+- apiGroups: [getambassador.io]
+  resources: [mappings/status]
+  verbs: [update]
+
+- apiGroups: [networking.internal.knative.dev]
+  resources: [clusteringresses, ingresses]
+  verbs: [get, list, watch]
+
+- apiGroups: [networking.x-k8s.io]
+  resources: ['*']
+  verbs: [get, list, watch]
+
+- apiGroups: [networking.internal.knative.dev]
+  resources: [ingresses/status, clusteringresses/status]
+  verbs: [update]
+
+- apiGroups: [extensions, networking.k8s.io]
+  resources: [ingresses, ingressclasses]
+  verbs: [get, list, watch]
+
+- apiGroups: [extensions, networking.k8s.io]
+  resources: [ingresses/status]
+  verbs: [update]
+---
+# Source: ambassador/templates/ambassador-agent.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ambassador-agent
+  namespace: "${NAMESPACE_NAME}"
+  labels:
+    product: aes
+---
+# Source: ambassador/templates/ambassador-agent.yaml
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: ambassador-agent
+  labels:
+    product: aes
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ambassador-agent
+subjects:
+- kind: ServiceAccount
+  name: ambassador-agent
+  namespace: "${NAMESPACE_NAME}"
+---
+# Source: ambassador/templates/ambassador-agent.yaml
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRole
+metadata:
+  name: ambassador-agent
+  labels:
+    product: aes
+aggregationRule:
+  clusterRoleSelectors:
+  - matchLabels:
+      rbac.getambassador.io/role-group: ambassador-agent
+rules: []
+---
+# Source: ambassador/templates/ambassador-agent.yaml
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRole
+metadata:
+  name: ambassador-agent-pods
+  labels:
+    rbac.getambassador.io/role-group: ambassador-agent
+    product: aes
+rules:
+- apiGroups: ['']
+  resources: [pods]
+  verbs: [get, list, watch]
+---
+# Source: ambassador/templates/ambassador-agent.yaml
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRole
+metadata:
+  name: ambassador-agent-rollouts
+  labels:
+    rbac.getambassador.io/role-group: ambassador-agent
+    product: aes
+rules:
+- apiGroups: [argoproj.io]
+  resources: [rollouts]
+  verbs: [get, list, watch]
+---
+# Source: ambassador/templates/ambassador-agent.yaml
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRole
+metadata:
+  name: ambassador-agent-applications
+  labels:
+    rbac.getambassador.io/role-group: ambassador-agent
+    product: aes
+rules:
+- apiGroups: [argoproj.io]
+  resources: [applications]
+  verbs: [get, list, watch]
+---
+# Source: ambassador/templates/ambassador-agent.yaml
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: Role
+metadata:
+  name: ambassador-agent-config
+  namespace: "${NAMESPACE_NAME}"
+  labels:
+    product: aes
+rules:
+- apiGroups: ['']
+  resources: [configmaps]
+  verbs: [get, list, watch]
+---
+# Source: ambassador/templates/ambassador-agent.yaml
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: RoleBinding
+metadata:
+  name: ambassador-agent-config
+  namespace: "${NAMESPACE_NAME}"
+  labels:
+    product: aes
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ambassador-agent-config
+subjects:
+- kind: ServiceAccount
+  name: ambassador-agent
+  namespace: "${NAMESPACE_NAME}"
