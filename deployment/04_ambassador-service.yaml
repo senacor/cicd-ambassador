@@ -42,6 +42,11 @@ metadata:
     # Hard-coded label for Prometheus Operator ServiceMonitor
     service: ambassador
     product: aes
+  annotations:
+    # Note that the backend talks over HTTP.
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: http
+    service.beta.kubernetes.io/aws-load-balancer-ssl-cert: "${KUBERNETES_LOADBALANCER_CERT_ARN}"
+    service.beta.kubernetes.io/aws-load-balancer-ssl-ports: "ambassador-https"
 spec:
   type: LoadBalancer
   ports:
@@ -50,7 +55,7 @@ spec:
     protocol: TCP
     name: ambassador
   - port: 443
-    targetPort: https
+    targetPort: http
     protocol: TCP
     name: ambassador-https
   selector:
